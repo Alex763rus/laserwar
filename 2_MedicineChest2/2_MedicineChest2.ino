@@ -27,6 +27,16 @@ long duration;
 int currentCm;
 int savedCm;
 
+enum { READY        // Бомба настроена, не активирована, не активируется, готова к активации
+     , ACTIVATION   // Бомбу начали активировать
+     , ACTIVATED    // Бомба активирована
+     , DEACTIVATION // Бомбу начали деактивировать
+     , DEACTIVATED  // Бомбу деактивировали
+     , BANG         // Бомба взорвалась
+     } bombStatus;  // Текущее состояние бомбы
+unsigned long timerBombStartActivDectiv; //Таймер для засекания нажатия на кнопку при активации/дезактивации бомбы
+unsigned long timerBombSound;            //Таймер для озвучивания работы активированной бомбы
+
 void setup(){
   Serial.begin(9600);
   pinMode(pinSound, OUTPUT);
@@ -51,10 +61,16 @@ void setup(){
   tmpRespDelay = 0;
   countResp = 7;
   savedCm = 0;
-  playMusic(1);
 
+  initNewGame();
+  playMusic(1);
 }
 
+void initNewGame(){
+  timerBombStartActivDectiv = 0;
+  timerBombSound = 0;
+  bombStatus = READY;
+}
 void kill(){
   digitalWrite(pinReleKill,HIGH);
   delay(2000);
@@ -91,10 +107,17 @@ void playMusic(int countRepeat){
   }
 }
 
+void playMusic(){
+    analogWrite(pinSound, 500);
+    delay(100);
+    analogWrite(pinSound, 0);
+}
+
 void setRespDelay(int respDelayIn){
   respDelay = respDelayIn;
   tmpRespDelay = respDelayIn;
   modeSetting = 0;
+  initNewGame();
   playMusic(2);
 }
 void setCountResp(int countRespIn){
@@ -181,8 +204,11 @@ void settingGame(){
       }
       if(IR.data == 16726215){//5
         savedCm = 0;
-        Serial.print("7771");
         setModeGame(5);
+      }
+      if(IR.data == 16734885){//6
+        setModeGame(6);
+        return;
       }
     }
     if(modeSetting == 2){
@@ -253,6 +279,36 @@ void settingGame(){
         setRespDelay(180);
       }
       if(IR.data == 16728765){//7
+        setRespDelay(300);
+      }
+      disp.displayInt(respDelay);
+    }
+    if(modeSetting == 6){
+      if(IR.data == 16724175){//1
+        setRespDelay(40);
+      }
+      if(IR.data == 16718055){//2
+        setRespDelay(60);
+      }
+      if(IR.data == 16743045){//3
+         setRespDelay(90);
+      }
+      if(IR.data == 16716015){//4
+        setRespDelay(120);
+      }
+      if(IR.data == 16726215){//5
+         setRespDelay(150);
+      }
+      if(IR.data == 16734885){//6
+        setRespDelay(180);
+      }
+      if(IR.data == 16728765){//7
+        setRespDelay(210);
+      }
+      if(IR.data == 16730805){//8
+        setRespDelay(240);
+      }
+      if(IR.data == 16732845){//9
         setRespDelay(300);
       }
       disp.displayInt(respDelay);
@@ -329,6 +385,113 @@ void logicGameMode5(){
   }
   delay(1000);
 }
+void logicGameMode6(){
+  /*
+  enum { READY        // Бомба настроена, не активирована, не активируется
+     , ACTIVATION   // Бомбу начали активировать
+     , ACTIVATED    // Бомба активирована
+     , DEACTIVATION // Бомбу начали деактивировать
+     , DEACTIVATED  // Бомбу деактивировали
+     , BANG         // Бомба взорвалась
+     } bombStatus;  // Текущее состояние бомбы
+     */
+  if(bombStatus == BANG) {
+    return;
+  }
+  if(bombStatus == READY) {
+    if(digitalRead(pinButton) == 0){//нажата кнопка
+      //начинаем активацию:
+      timerBombStartActivDectiv = millis();
+      bombStatus = ACTIVATION;
+    }
+  }
+  else if(bombStatus == ACTIVATION) {
+    if(digitalRead(pinButton) == 0){//нажата кнопка
+      if(isIntervalPassed(timerBombStartActivDectiv, 5000)){
+        bombStatus = ACTIVATED;
+        playMusic(2);
+      }
+    } else {
+      bombStatus = READY;
+    }
+  }
+  else if(bombStatus == ACTIVATED) {
+    if(digitalRead(pinButton) == 0){//нажата кнопка
+      //начинаем дезактивацию:
+      timerBombStartActivDectiv = millis();
+      bombStatus = DEACTIVATION;
+    }
+  }
+  else if(bombStatus == DEACTIVATION) {
+    if(digitalRead(pinButton) == 0){//нажата кнопка
+      if(isIntervalPassed(timerBombStartActivDectiv, 10000)){
+        bombStatus = DEACTIVATED;
+      }
+    } else {
+      bombStatus = ACTIVATED;
+      timerBombSound = millis();
+    }
+  }
+
+  if(bombStatus == ACTIVATED || bombStatus == DEACTIVATION) {
+    if(tmpRespDelay == 0){
+      // взрыв
+      bombStatus = BANG;
+      kill();
+      playMusic(5);
+      tmpRespDelay = -1;
+      return;
+    }
+    --tmpRespDelay;
+    disp.displayInt(tmpRespDelay);
+    //организовать звук
+    for(int i = 0; i < 10; ++i){
+       checkAndPlayBombMusic();
+      delay(100);
+    }
+  }
+
+
+}
+void checkAndPlayBombMusic(){
+   if(tmpRespDelay > 50){
+      if(isIntervalPassed(timerBombSound, 10000)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+    if(tmpRespDelay > 30 && tmpRespDelay <= 50){
+      if(isIntervalPassed(timerBombSound, 5000)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+    if(tmpRespDelay > 20 && tmpRespDelay <= 30){
+      if(isIntervalPassed(timerBombSound, 2000)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+    if(tmpRespDelay > 10 && tmpRespDelay <= 20){
+      if(isIntervalPassed(timerBombSound, 1000)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+    if( tmpRespDelay > 5 && tmpRespDelay <= 10){
+      if(isIntervalPassed(timerBombSound, 300)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+    if( tmpRespDelay <= 5){
+      if(isIntervalPassed(timerBombSound, 150)){
+        playMusic();
+        timerBombSound = millis();
+      }
+    }
+}
+
 void loop(){
   settingGame();
   if(modeSetting != 0){
@@ -349,4 +512,11 @@ void loop(){
   if(modeGame == 5){
     logicGameMode5();
   }
+  if(modeGame == 6){
+    logicGameMode6();
+  }
+}
+
+bool isIntervalPassed(long t1, long interval){
+  return ((millis() - t1) > interval);
 }
