@@ -1,6 +1,7 @@
 #include <iarduino_IR_RX.h> 
 #include "GyverTM1637.h"
 
+const double vers = 1.0;
 int pinIk = 7;
 int pinDisplayCLK = 2;
 int pinDisplayDIO = 3;
@@ -34,8 +35,10 @@ enum { READY        // Бомба настроена, не активирова�
      , DEACTIVATED  // Бомбу деактивировали
      , BANG         // Бомба взорвалась
      } bombStatus;  // Текущее состояние бомбы
-unsigned long timerBombStartActivDectiv; //Таймер для засекания нажатия на кнопку при активации/дезактивации бомбы
-unsigned long timerBombSound;            //Таймер для озвучивания работы активированной бомбы
+     
+unsigned long timerBombActivation;    //Таймер для засекания нажатия на кнопку при активации бомбы
+unsigned long timerBombDesactivation; //Таймер для засекания нажатия на кнопку при активации бомбы
+unsigned long timerBombSound;         //Таймер для озвучивания работы активированной бомбы
 
 void setup(){
   Serial.begin(9600);
@@ -67,7 +70,8 @@ void setup(){
 }
 
 void initNewGame(){
-  timerBombStartActivDectiv = 0;
+  timerBombActivation = 0;
+  timerBombDesactivation = 0;
   timerBombSound = 0;
   bombStatus = READY;
 }
@@ -97,7 +101,19 @@ void printEndGame() {
   disp.runningString(welcome_banner, sizeof(welcome_banner), 300);
   disp.scrollByte(welcome_banner, 200);
 }
-
+void printStartBomb() {
+  byte welcome_banner[] = {_8, _8, _8, _8};
+  disp.runningString(welcome_banner, sizeof(welcome_banner), 300);
+  disp.scrollByte(welcome_banner, 200);
+}
+void printBangBomb() {
+  byte welcome_banner[] = {_Y, _Y, _Y, _Y};
+  disp.runningString(welcome_banner, sizeof(welcome_banner), 300);
+  disp.scrollByte(welcome_banner, 200);
+}
+void printEndBomb() {
+  disp.clear();
+}
 void playMusic(int countRepeat){
   for(int i = 0; i < countRepeat; ++i){
     analogWrite(pinSound, 500);
@@ -401,15 +417,17 @@ void logicGameMode6(){
   if(bombStatus == READY) {
     if(digitalRead(pinButton) == 0){//нажата кнопка
       //начинаем активацию:
-      timerBombStartActivDectiv = millis();
+      timerBombActivation = millis();
       bombStatus = ACTIVATION;
     }
   }
   else if(bombStatus == ACTIVATION) {
     if(digitalRead(pinButton) == 0){//нажата кнопка
-      if(isIntervalPassed(timerBombStartActivDectiv, 5000)){
+      if(isIntervalPassed(timerBombActivation, 5000)){
         bombStatus = ACTIVATED;
+        timerBombActivation = millis();
         playMusic(2);
+        printStartBomb();
       }
     } else {
       bombStatus = READY;
@@ -418,14 +436,15 @@ void logicGameMode6(){
   else if(bombStatus == ACTIVATED) {
     if(digitalRead(pinButton) == 0){//нажата кнопка
       //начинаем дезактивацию:
-      timerBombStartActivDectiv = millis();
+      timerBombDesactivation = millis();
       bombStatus = DEACTIVATION;
     }
   }
   else if(bombStatus == DEACTIVATION) {
     if(digitalRead(pinButton) == 0){//нажата кнопка
-      if(isIntervalPassed(timerBombStartActivDectiv, 10000)){
+      if(isIntervalPassed(timerBombDesactivation, 10000)){
         bombStatus = DEACTIVATED;
+        printEndBomb();
       }
     } else {
       bombStatus = ACTIVATED;
@@ -436,50 +455,50 @@ void logicGameMode6(){
   if(bombStatus == ACTIVATED || bombStatus == DEACTIVATION) {
     if(tmpRespDelay == 0){
       // взрыв
+      analogWrite(pinSound, 500);
       bombStatus = BANG;
       kill();
-      playMusic(5);
+      printBangBomb();
       tmpRespDelay = -1;
+      analogWrite(pinSound, 0);
       return;
     }
-    --tmpRespDelay;
-    disp.displayInt(tmpRespDelay);
-    //организовать звук
-    for(int i = 0; i < 10; ++i){
-       checkAndPlayBombMusic();
-      delay(100);
+    if(isIntervalPassed(timerBombActivation, 1000)){
+      timerBombActivation = millis();
+      --tmpRespDelay;
     }
-  }
+    checkAndPlayBombMusic();
+}
 
 
 }
 void checkAndPlayBombMusic(){
-   if(tmpRespDelay > 50){
+   if(tmpRespDelay > 80){
       if(isIntervalPassed(timerBombSound, 10000)){
         playMusic();
         timerBombSound = millis();
       }
     }
-    if(tmpRespDelay > 30 && tmpRespDelay <= 50){
+    if(tmpRespDelay > 40 && tmpRespDelay <= 80){
       if(isIntervalPassed(timerBombSound, 5000)){
         playMusic();
         timerBombSound = millis();
       }
     }
-    if(tmpRespDelay > 20 && tmpRespDelay <= 30){
+    if(tmpRespDelay > 25 && tmpRespDelay <= 40){
       if(isIntervalPassed(timerBombSound, 2000)){
         playMusic();
         timerBombSound = millis();
       }
     }
-    if(tmpRespDelay > 10 && tmpRespDelay <= 20){
+    if(tmpRespDelay > 15 && tmpRespDelay <= 25){
       if(isIntervalPassed(timerBombSound, 1000)){
         playMusic();
         timerBombSound = millis();
       }
     }
-    if( tmpRespDelay > 5 && tmpRespDelay <= 10){
-      if(isIntervalPassed(timerBombSound, 300)){
+    if( tmpRespDelay > 5 && tmpRespDelay <= 15){
+      if(isIntervalPassed(timerBombSound, 500)){
         playMusic();
         timerBombSound = millis();
       }

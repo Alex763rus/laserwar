@@ -1,6 +1,6 @@
 Скетч для аптечек.
 1. Описание пинов:
-  int pinIk = 7;      		//digital порт инфракрасного приемника
+  int pinIk = 7;       		//digital порт инфракрасного приемника
   int pinDisplayCLK = 2;  	//digital порт CLK выхода дисплей
   int pinDisplayDIO = 3;	//digital порт DIO выхода дисплей
   int pinSound = 9;		//digital порт пищалки (плюсовой контакт)
